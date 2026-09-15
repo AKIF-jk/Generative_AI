@@ -1,6 +1,11 @@
+<<<<<<< HEAD
 /.venv
 /data
 /results
 *.pyc
 /resources
 .env
+=======
+.env
+data/
+>>>>>>> e6d62aa (added data to gitignore)
