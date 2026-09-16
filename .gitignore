@@ -1,3 +1,8 @@
 .env
-data/
+.venv/
+__pycache__/
+*.py[cod]
+data/images/
+data/annotations/
+data/*.tar.gz
 resources/
