@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import tarfile
 import tempfile
 import urllib.request
 from pathlib import Path
+
+#sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pet_restoration.manifests import build_fixed_manifest, make_development_split, official_image_paths, write_manifest, write_split_csv
 
@@ -42,12 +45,18 @@ def download_dataset(dataset_root: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset-root", type=Path, default=Path("data"))
+    parser.add_argument("--dataset-root", type=Path, default=None)
     parser.add_argument("--download", action="store_true", help="download missing official archives")
+    parser.add_argument("--drive", action="store_true", help="use dataset from Google Drive at /content/drive/MyDrive/data")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--force", action="store_true", help="replace existing generated artefacts")
     arguments = parser.parse_args()
-    dataset_root = arguments.dataset_root
+    if arguments.drive:
+        dataset_root = Path("/content/drive/MyDrive/data")
+    elif arguments.dataset_root:
+        dataset_root = arguments.dataset_root
+    else:
+        dataset_root = Path("data")
     if arguments.download:
         download_dataset(dataset_root)
     development_paths = official_image_paths(dataset_root, "trainval.txt")
