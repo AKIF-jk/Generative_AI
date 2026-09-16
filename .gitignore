@@ -7,5 +7,10 @@
 .env
 =======
 .env
-data/
->>>>>>> e6d62aa (added data to gitignore)
+.venv/
+__pycache__/
+*.py[cod]
+data/images/
+data/annotations/
+data/*.tar.gz
+resources/
