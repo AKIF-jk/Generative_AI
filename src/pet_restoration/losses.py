@@ -70,7 +70,7 @@ def differentiable_ssim(x: Tensor, y: Tensor) -> Tensor:
     ssim_sum = _ssim_channel(x[:, 0:1], y[:, 0:1])
     for c in range(1, channels):
         ssim_sum = ssim_sum + _ssim_channel(x[:, c : c + 1], y[:, c : c + 1])
-    return ssim_sum.mean()
+    return ssim_sum.mean() /channels
 
 
 def combined_loss(
