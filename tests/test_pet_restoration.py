@@ -5,7 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-
+from PIL import Image
 import numpy as np
 
 from pet_restoration.corruptions import apply_manifest_corruption, gaussian_blur, occlude, salt_and_pepper
