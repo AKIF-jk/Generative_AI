@@ -343,7 +343,8 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
             f"val_ssim={val_metrics['val_ssim']:.4f}  "
             f"rank={rs:.4f}  "
             f"({elapsed:.1f}s)"
-            f"{gate_str}"
+            f"{gate_str}",
+            flush=True,
         )
 
         # --- Per-epoch logging (W&B, MLflow, etc.) ---
