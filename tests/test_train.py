@@ -5,7 +5,6 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
-from collections import defaultdict
 from pathlib import Path
 from unittest.mock import patch
 
@@ -131,15 +130,18 @@ class TestValidateIgnoresAbsentCorruptionTypes(unittest.TestCase):
         # Verify manually: recompute batch 0 clean metrics
         from pet_restoration.losses import l1_loss as _l1
         with torch.no_grad():
-            b0 = ds[0:3]
-            pred_b0 = model(b0[0])
+            # Build explicit batches (avoid relying on slice indexing)
+            b0_corr = torch.stack([ds.corrupteds[i] for i in range(3)])
+            b0_clean = torch.stack([ds.cleans[i] for i in range(3)])
+            pred_b0 = model(b0_corr)
             clean_mask = torch.tensor([True, True, False])
-            batch0_clean_l1 = _l1(pred_b0[clean_mask], b0[1][clean_mask]).item()
+            batch0_clean_l1 = _l1(pred_b0[clean_mask], b0_clean[clean_mask]).item()
 
-            b1 = ds[3:6]
-            pred_b1 = model(b1[0])
+            b1_corr = torch.stack([ds.corrupteds[i] for i in range(3, 6)])
+            b1_clean = torch.stack([ds.cleans[i] for i in range(3, 6)])
+            pred_b1 = model(b1_corr)
             occ_mask = torch.tensor([True, True, False])
-            batch1_occ_l1 = _l1(pred_b1[occ_mask], b1[1][occ_mask]).item()
+            batch1_occ_l1 = _l1(pred_b1[occ_mask], b1_clean[occ_mask]).item()
 
         # clean_l1 should equal batch0_clean_l1 (only one batch with clean)
         self.assertAlmostEqual(result["clean_l1"], batch0_clean_l1, places=5)
