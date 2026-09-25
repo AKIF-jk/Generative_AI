@@ -96,6 +96,9 @@ class TrainConfig:
     # Pruner callback
     report_to: Callable[[int, float], None] | None = None
 
+    # Per-epoch logging callback (W&B, MLflow, etc.). Optional.
+    log_epoch: Callable[[int, dict[str, float], dict[str, float]], None] | None = None
+
     # Checkpoint
     checkpoint_metric_name: str = "ranking_score"
 
@@ -343,6 +346,10 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
             f"{gate_str}"
         )
 
+        # --- Per-epoch logging (W&B, MLflow, etc.) ---
+        if cfg.log_epoch is not None:
+            cfg.log_epoch(epoch, train_metrics, val_metrics)
+
         # --- Report to pruner ---
         if cfg.report_to is not None:
             cfg.report_to(epoch, rs)
@@ -359,7 +366,7 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
             best_epoch = epoch
             epochs_without_improve = 0
             # Exclude report_to: it may be an unpicklable lambda/closure.
-            cfg_dict = {k: v for k, v in asdict(cfg).items() if k != "report_to"}
+            cfg_dict = {k: v for k, v in asdict(cfg).items() if k not in {"report_to", "log_epoch"}}    
             best_state = {
                 "model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
