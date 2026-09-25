@@ -42,12 +42,9 @@ from torch.utils.data import DataLoader
 # Ensure the sibling ``pet_restoration`` package is importable regardless of
 # how this script is invoked.
 # ---------------------------------------------------------------------------
-import sys as _sys
-from pathlib import Path as _Path
-
-_SRC_DIR = str(_Path(__file__).resolve().parent.parent)
-if _SRC_DIR not in _sys.path:
-    _sys.path.insert(0, _SRC_DIR)
+_SRC_DIR = str(Path(__file__).resolve().parent.parent)
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
 
 from pet_restoration.dataset import CORRUPTION_LABELS, PetRestorationDataset
 from pet_restoration.losses import (
@@ -148,7 +145,7 @@ def train_one_epoch(
         pred = model(corrupted)
         loss = combined_loss(pred, clean, alpha=cfg.alpha)
 
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
 
@@ -190,8 +187,6 @@ def validate(
     total_ssim = 0.0
     total_samples = 0
 
-    idx_to_name = {v: k for k, v in CORRUPTION_LABELS.items()}
-
     per_corruption_l1: dict[str, list[float]] = defaultdict(list)
     per_corruption_ssim_loss: dict[str, list[float]] = defaultdict(list)
     per_corruption_count: dict[str, int] = defaultdict(int)
@@ -211,15 +206,18 @@ def validate(
             total_ssim += batch_ssim * batch_size
             total_samples += batch_size
 
-            # Per-corruption diagnostics
+            # Per-corruption diagnostics (alpha only echoes into the dict;
+            # the L1/SSIM values are computed independently of it).
             diag = log_alpha_diagnostics(pred, clean, labels, alpha=cfg.alpha)
 
             for name in CORRUPTION_LABELS:
                 idx = CORRUPTION_LABELS[name]
                 count = (labels == idx).sum().item()
                 if count > 0:
-                    per_corruption_l1[name].append(diag[f"{name}_l1"])
-                    per_corruption_ssim_loss[name].append(diag[f"{name}_ssim_loss"])
+                    # Weight by count so aggregation is a true sample-weighted
+                    # mean, not an unweighted mean of per-batch means.
+                    per_corruption_l1[name].append(diag[f"{name}_l1"] * count)
+                    per_corruption_ssim_loss[name].append(diag[f"{name}_ssim_loss"] * count)
                     per_corruption_count[name] += count
 
     n = max(total_samples, 1)
@@ -233,11 +231,10 @@ def validate(
     }
 
     for name in CORRUPTION_LABELS:
-        l1_vals = per_corruption_l1[name]
-        ssim_vals = per_corruption_ssim_loss[name]
-        if l1_vals:
-            result[f"{name}_l1"] = sum(l1_vals) / len(l1_vals)
-            result[f"{name}_ssim_loss"] = sum(ssim_vals) / len(ssim_vals)
+        total_c = per_corruption_count[name]
+        if total_c > 0:
+            result[f"{name}_l1"] = sum(per_corruption_l1[name]) / total_c
+            result[f"{name}_ssim_loss"] = sum(per_corruption_ssim_loss[name]) / total_c
         else:
             result[f"{name}_l1"] = 0.0
             result[f"{name}_ssim_loss"] = 0.0
@@ -308,9 +305,11 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
     best_epoch = -1
     best_state: dict[str, Any] | None = None
     epochs_without_improve = 0
+    epochs_run = 0
     status = "ok"
 
     for epoch in range(1, cfg.epochs + 1):
+        epochs_run = epoch
         t0 = time.monotonic()
 
         train_metrics = train_one_epoch(model, train_loader, optimizer, cfg)
@@ -359,11 +358,13 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
             best_ranking = rs
             best_epoch = epoch
             epochs_without_improve = 0
+            # Exclude report_to: it may be an unpicklable lambda/closure.
+            cfg_dict = {k: v for k, v in asdict(cfg).items() if k != "report_to"}
             best_state = {
                 "model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "epoch": epoch,
-                "cfg": asdict(cfg),
+                "cfg": cfg_dict,
                 "ranking_score": rs,
                 "val_metrics": val_metrics,
             }
@@ -388,14 +389,12 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
     else:
         ckpt_path = ""
 
-    final_val_metrics = val_metrics if best_state is not None else {}
-
     summary = {
         "best_ranking_score": best_ranking if best_state is not None else float("inf"),
         "best_epoch": best_epoch,
-        "epochs_run": epoch if "epoch" in dir() else 0,
+        "epochs_run": epochs_run,
         "status": status,
-        "final_val_metrics": final_val_metrics,
+        "final_val_metrics": best_state["val_metrics"] if best_state is not None else {},
         "best_checkpoint_path": str(ckpt_path),
     }
 
