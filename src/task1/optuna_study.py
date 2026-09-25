@@ -224,6 +224,9 @@ def make_objective(args: argparse.Namespace) -> Callable[[optuna.Trial], float]:
             # trial whose value is the worst possible; the study keeps running
             # instead of being killed by the OOM.
             return float("inf")
+        except Exception as e:
+            wandb.log({"failed": True, "failure_type": type(e).__name__})
+            raise
         finally:
             wandb.finish()
             if torch.cuda.is_available():
