@@ -1,11 +1,70 @@
-.env
-.venv/
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
-data/images/
-data/annotations/
-data/*.tar.gz
+*$py.class
+*.so
+
+# Caches and checkpoints
+.pytest_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Environments & virtualenvs
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+ENV/
+
+# IDE & Editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Scratch and temporary directories
+scratch/
 resources/
+
+# Datasets and raw archives (do not upload datasets directly to GitHub)
+data/images/
+data/images_128/
+data/annotations/
 data/sample_images/
-data/images_128
-data/FS2K
+data/FS2K/
+data/*.tar.gz
+data/*.zip
+data/*.tar
+
+# Model checkpoints & large binary weights
+*.pth
+*.pt
+*.ckpt
+*.bin
+*.safetensors
+*.onnx
+checkpoints/
+models_checkpoints/
+
+# Experiment tracking logs
+wandb/
+mlruns/
+lightning_logs/
+
+# Evaluation outputs
+evaluation_results/
+
+# Frontend build & dependencies
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+node_modules/
+dist/
+build/
+*.log
