@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Mount or download the ONNX model to the root of the backend or app
+      # By default it expects it in /app/generator.onnx
+      - ONNX_MODEL_PATH=/models/generator.onnx
+    volumes:
+      - ./onnx_models:/models
+    restart: unless-stopped

@@ -1,0 +1,10 @@
+data_dir: "data/FS2K"
+epochs: 100
+batch_size: 16
+lr_g: 0.0002
+lr_d: 0.0002
+base_channels: 64
+dropout: 0.1
+style_dim: 16
+lambda_l1: 100.0
+save_interval: 10
