@@ -1,6 +1,21 @@
 import random
+from PIL import Image
 from torchvision import transforms
 from torchvision.transforms import functional as F
+
+# Must stay in sync with backend/app/routers/face_to_sketch.py (RESAMPLE).
+# The backend Docker image only copies backend/app, so it cannot import this module.
+RESAMPLE = Image.Resampling.BICUBIC
+
+
+def resize_pair(photo, sketch, size):
+    """Resize both modalities with one shared filter so training and
+    inference see identical pixel statistics."""
+    return (
+        photo.resize((size, size), RESAMPLE),
+        sketch.resize((size, size), RESAMPLE),
+    )
+
 
 class PairedTransform:
     def __init__(self, size=128):
@@ -11,8 +26,7 @@ class PairedTransform:
         
     def __call__(self, photo, sketch):
         # Resize both to 128x128
-        photo = F.resize(photo, [self.size, self.size])
-        sketch = F.resize(sketch, [self.size, self.size])
+        photo, sketch = resize_pair(photo, sketch, self.size)
         
         # Random horizontal flip (shared state)
         if random.random() > 0.5:
@@ -36,8 +50,7 @@ class PairedValTransform:
         
     def __call__(self, photo, sketch):
         # Resize both to 128x128
-        photo = F.resize(photo, [self.size, self.size])
-        sketch = F.resize(sketch, [self.size, self.size])
+        photo, sketch = resize_pair(photo, sketch, self.size)
         
         # Convert to tensor
         photo = F.to_tensor(photo)

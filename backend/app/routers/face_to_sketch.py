@@ -9,6 +9,10 @@ import os
 
 router = APIRouter(prefix="/api/face-to-sketch", tags=["face-to-sketch"])
 
+# Must stay in sync with src/task4_face2sketch/data/augmentations.py (RESAMPLE).
+# This Docker image only copies backend/app, so it cannot import that module.
+RESAMPLE = Image.Resampling.BICUBIC
+
 class ONNXModelSession:
     def __init__(self):
         self.session = None
@@ -54,7 +58,7 @@ async def generate_sketch(photo: UploadFile = File(...), style: int = Form(...))
     start_time = time.time()
     
     # Preprocess
-    img = img.resize((128, 128), Image.BILINEAR)
+    img = img.resize((128, 128), RESAMPLE)
     img_array = np.array(img).astype(np.float32)
     # Normalize to [-1.0, 1.0]
     img_array = (img_array / 127.5) - 1.0
