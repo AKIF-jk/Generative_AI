@@ -140,17 +140,27 @@ def evaluate_per_sample(model, loader, dataset, device):
     return per_sample
 
 
-def compute_copy_baseline(loader, dataset):
-    """Ranking score for the trivial 'output = input' model (batched)."""
+def compute_copy_baseline(
+    loader: DataLoader, dataset: PetRestorationDataset, device: str
+) -> dict:
+    """Ranking score for the trivial 'output = input' model (GPU-accelerated)."""
     from pet_restoration.losses import _ssim_channel
 
     total_l1 = total_ssim = n = 0
-    per_group = defaultdict(lambda: {"l1": [], "ssim": []})
+    per_group: dict[tuple[str, str], dict[str, list[float]]] = defaultdict(
+        lambda: {"l1": [], "ssim": []}
+    )
     global_idx = 0
 
     with torch.no_grad():
         for corrupted, clean, _ in loader:
+            corrupted = corrupted.to(device, non_blocking=True)
+            clean = clean.to(device, non_blocking=True)
+
+            # Batched L1 per sample (single op on GPU)
             l1_per = (corrupted - clean).abs().mean(dim=(1, 2, 3)).cpu().tolist()
+
+            # Batched SSIM per sample: 3 calls per batch (one per channel)
             C = corrupted.shape[1]
             ssim_maps = [_ssim_channel(corrupted[:, c:c+1], clean[:, c:c+1]) for c in range(C)]
             ssim_per = torch.cat(ssim_maps, dim=1).mean(dim=(1, 2, 3)).cpu().tolist()
@@ -164,6 +174,9 @@ def compute_copy_baseline(loader, dataset):
                 per_group[key]["l1"].append(l1_per[i])
                 per_group[key]["ssim"].append(ssim_per[i])
                 global_idx += 1
+
+            if global_idx % 2000 < corrupted.shape[0]:
+                print(f"  baseline {global_idx}/{len(dataset)}", flush=True)
 
     mean_l1 = total_l1 / n
     mean_ssim = total_ssim / n
@@ -323,7 +336,7 @@ def main() -> None:
 
     # ---- Copy baseline ----
     print("Computing copy baseline...")
-    baseline = compute_copy_baseline(loader, test_ds)
+    baseline = compute_copy_baseline(loader, test_ds,device)
 
     # ---- Print results ----
     print("\n" + "=" * 70)
