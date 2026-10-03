@@ -23,6 +23,21 @@ def set_seed(seed=42):
     import random
     random.seed(seed)
 
+def resolve_wandb_mode():
+    """Pick a W&B mode that never blocks on stdin.
+
+    ``wandb.init`` prompts for an API key on stdin when it cannot authenticate
+    interactively, which hangs a non-interactive run (Kaggle/CI).  So the mode is
+    resolved up front: an explicit ``WANDB_MODE`` wins, otherwise a run with an
+    API key goes online and everything else falls back to offline.  Offline
+    runs are written to ``./wandb/`` and can be uploaded later with
+    ``wandb sync wandb/offline-runs-*``.
+    """
+    mode = os.environ.get("WANDB_MODE", "").strip()
+    if mode:
+        return mode
+    return "online" if os.environ.get("WANDB_API_KEY") else "offline"
+
 def get_dataloaders(data_dir, batch_size=16):
     set_seed(42)
     anno_file = os.path.join(data_dir, 'anno_train.json')
@@ -127,8 +142,12 @@ def main(config_path):
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
         
-    run = wandb.init(project="FS2K_Task4", config=config)
-    cfg = wandb.config
+    wandb_mode = resolve_wandb_mode()
+    print(f"WANDB_MODE: {wandb_mode}")
+    # mode is always explicit and reinit=True because the notebook may already
+    # hold an open run; without it this call would inherit that run's config.
+    run = wandb.init(project="FS2K_Task4", config=config, mode=wandb_mode, reinit=True)
+    cfg = run.config
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
