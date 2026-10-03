@@ -88,3 +88,14 @@ class GeneratorUNet(nn.Module):
         u6 = self.up6(u5, d1)
 
         return self.final(u6)
+
+
+def infer_arch_from_state_dict(state_dict):
+    """Recover (num_styles, style_dim, base_channels) from a GeneratorUNet state dict."""
+    if 'down1.model.0.weight' not in state_dict:
+        raise KeyError("Not a GeneratorUNet state dict: missing 'down1.model.0.weight'")
+    first_conv = state_dict['down1.model.0.weight']
+    base_channels = int(first_conv.shape[0])
+    style_dim = int(first_conv.shape[1]) - 3
+    num_styles = int(state_dict['style_embedding.weight'].shape[0])
+    return num_styles, style_dim, base_channels

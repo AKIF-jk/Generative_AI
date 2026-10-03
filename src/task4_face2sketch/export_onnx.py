@@ -2,21 +2,32 @@ import os
 import torch
 import torch.onnx
 import numpy as np
-from models.generator_unet import GeneratorUNet
+from models.generator_unet import GeneratorUNet, infer_arch_from_state_dict
 
 def export_to_onnx(model_path, onnx_path, base_channels=96, dropout=0.23843508579472333, style_dim=16):
     device = torch.device('cpu')
-    gen = GeneratorUNet(base_channels=base_channels, style_dim=style_dim, dropout=dropout)
-    
-    # Load state dict if available
+    num_styles = 3
+
+    state_dict = None
     if os.path.exists(model_path):
         try:
-            gen.load_state_dict(torch.load(model_path, map_location=device))
-            print(f"Loaded generator weights from {model_path}.")
+            state_dict = torch.load(model_path, map_location=device, weights_only=True)
+            if isinstance(state_dict, dict) and 'state_dict' in state_dict:
+                state_dict = state_dict['state_dict']
+            num_styles, ckpt_style_dim, ckpt_base_channels = infer_arch_from_state_dict(state_dict)
+            print(f"Checkpoint architecture: base_channels={ckpt_base_channels}, style_dim={ckpt_style_dim}, num_styles={num_styles}")
+            base_channels, style_dim = ckpt_base_channels, ckpt_style_dim
         except Exception as e:
+            state_dict = None
             print(f"Could not load weights, exporting untrained model: {e}")
     else:
         print(f"Checkpoint {model_path} not found. Exporting model with initialized weights.")
+
+    gen = GeneratorUNet(base_channels=base_channels, num_styles=num_styles, style_dim=style_dim, dropout=dropout)
+
+    if state_dict is not None:
+        gen.load_state_dict(state_dict)
+        print(f"Loaded generator weights from {model_path}.")
         
     gen.eval()
     

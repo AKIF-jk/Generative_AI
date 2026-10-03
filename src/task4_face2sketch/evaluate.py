@@ -8,7 +8,7 @@ from skimage.metrics import structural_similarity as ssim_fn
 
 from data.dataset import FS2KPairedDataset
 from data.augmentations import PairedValTransform
-from models.generator_unet import GeneratorUNet
+from models.generator_unet import GeneratorUNet, infer_arch_from_state_dict
 
 def evaluate_and_plot(model_path, data_dir, output_dir, base_channels=96, dropout=0.23843508579472333, style_dim=16, max_visualizations=20):
     os.makedirs(output_dir, exist_ok=True)
@@ -18,12 +18,24 @@ def evaluate_and_plot(model_path, data_dir, output_dir, base_channels=96, dropou
     val_dataset = FS2KPairedDataset(data_dir, split='test', transform=PairedValTransform())
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
-    gen = GeneratorUNet(base_channels=base_channels, style_dim=style_dim, dropout=dropout).to(device)
+    state_dict = None
+    num_styles = 3
     if os.path.exists(model_path):
-        gen.load_state_dict(torch.load(model_path, map_location=device))
-        print(f"Loaded model weights from {model_path}")
+        state_dict = torch.load(model_path, map_location=device, weights_only=True)
+        if isinstance(state_dict, dict) and 'state_dict' in state_dict:
+            state_dict = state_dict['state_dict']
+        num_styles, ckpt_style_dim, ckpt_base_channels = infer_arch_from_state_dict(state_dict)
+        print(f"Checkpoint architecture: base_channels={ckpt_base_channels}, style_dim={ckpt_style_dim}, num_styles={num_styles}")
+        if (ckpt_base_channels, ckpt_style_dim) != (base_channels, style_dim):
+            print(f"Overriding requested (base_channels={base_channels}, style_dim={style_dim}) to match the checkpoint.")
+        base_channels, style_dim = ckpt_base_channels, ckpt_style_dim
     else:
         print(f"Warning: {model_path} not found. Running with randomly initialized model.")
+
+    gen = GeneratorUNet(base_channels=base_channels, num_styles=num_styles, style_dim=style_dim, dropout=dropout).to(device)
+    if state_dict is not None:
+        gen.load_state_dict(state_dict)
+        print(f"Loaded model weights from {model_path}")
         
     gen.eval()
     
