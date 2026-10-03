@@ -55,40 +55,7 @@ def load_model(ckpt_path: Path, device: str) -> tuple[torch.nn.Module, dict]:
     return model, ckpt
 
 
-def evaluate_per_sample(
-    model: torch.nn.Module,
-    loader: DataLoader,
-    dataset: PetRestorationDataset,
-    device: str,
-) -> list[dict]:
-    """Run inference over the test set, return per-sample metrics."""
-    per_sample = []
-    global_idx = 0
 
-    with torch.no_grad():
-        for corrupted, clean, labels in loader:
-            corrupted = corrupted.to(device)
-            clean = clean.to(device)
-            pred = model(corrupted)
-
-            for i in range(corrupted.shape[0]):
-                record = dataset.records[global_idx]
-
-                l1_val = l1_loss(pred[i : i + 1], clean[i : i + 1]).item()
-                ssim_val = differentiable_ssim(pred[i : i + 1], clean[i : i + 1]).item()
-
-                per_sample.append({
-                    "index": global_idx,
-                    "image_path": record["image_path"],
-                    "corruption": record["corruption"],
-                    "severity": record["severity"],
-                    "l1": l1_val,
-                    "ssim": ssim_val,
-                    "rank": ranking_score(l1_val, ssim_val),
-                })
-                global_idx += 1
-
-    return per_sample
 
 
 def aggregate(per_sample: list[dict]) -> dict:
@@ -133,31 +100,69 @@ def aggregate(per_sample: list[dict]) -> dict:
     }
     return result
 
+def evaluate_per_sample(model, loader, dataset, device):
+    """Run inference, return per-sample metrics (batched)."""
+    from pet_restoration.losses import _ssim_channel
 
-def compute_copy_baseline(
-    loader: DataLoader, dataset: PetRestorationDataset
-) -> dict:
-    """Ranking score for the trivial 'output = input' model."""
+    per_sample = []
+    global_idx = 0
+
+    with torch.no_grad():
+        for corrupted, clean, labels in loader:
+            corrupted = corrupted.to(device)
+            clean = clean.to(device)
+            pred = model(corrupted)
+
+            # L1 per sample — one op, batched
+            l1_per = (pred - clean).abs().mean(dim=(1, 2, 3)).cpu().tolist()
+
+            # SSIM per sample — one call per channel, batched over B
+            C = pred.shape[1]
+            ssim_maps = [_ssim_channel(pred[:, c:c+1], clean[:, c:c+1]) for c in range(C)]
+            ssim_per = torch.stack(ssim_maps, dim=1).mean(dim=(1, 2, 3)).cpu().tolist()
+
+            for i in range(corrupted.shape[0]):
+                record = dataset.records[global_idx]
+                per_sample.append({
+                    "index": global_idx,
+                    "image_path": record["image_path"],
+                    "corruption": record["corruption"],
+                    "severity": record["severity"],
+                    "l1": l1_per[i],
+                    "ssim": ssim_per[i],
+                    "rank": ranking_score(l1_per[i], ssim_per[i]),
+                })
+                global_idx += 1
+
+            if global_idx % 2000 < corrupted.shape[0]:
+                print(f"  processed {global_idx}/{len(dataset)}", flush=True)
+
+    return per_sample
+
+
+def compute_copy_baseline(loader, dataset):
+    """Ranking score for the trivial 'output = input' model (batched)."""
+    from pet_restoration.losses import _ssim_channel
+
     total_l1 = total_ssim = n = 0
-    per_group: dict[tuple[str, str], dict[str, list[float]]] = defaultdict(
-        lambda: {"l1": [], "ssim": []}
-    )
+    per_group = defaultdict(lambda: {"l1": [], "ssim": []})
     global_idx = 0
 
     with torch.no_grad():
         for corrupted, clean, _ in loader:
+            l1_per = (corrupted - clean).abs().mean(dim=(1, 2, 3)).cpu().tolist()
+            C = corrupted.shape[1]
+            ssim_maps = [_ssim_channel(corrupted[:, c:c+1], clean[:, c:c+1]) for c in range(C)]
+            ssim_per = torch.stack(ssim_maps, dim=1).mean(dim=(1, 2, 3)).cpu().tolist()
+
             for i in range(corrupted.shape[0]):
-                c = corrupted[i : i + 1]
-                x = clean[i : i + 1]
-                l1_val = l1_loss(c, x).item()
-                ssim_val = differentiable_ssim(c, x).item()
-                total_l1 += l1_val
-                total_ssim += ssim_val
+                total_l1 += l1_per[i]
+                total_ssim += ssim_per[i]
                 n += 1
                 record = dataset.records[global_idx]
                 key = (record["corruption"], record["severity"])
-                per_group[key]["l1"].append(l1_val)
-                per_group[key]["ssim"].append(ssim_val)
+                per_group[key]["l1"].append(l1_per[i])
+                per_group[key]["ssim"].append(ssim_per[i])
                 global_idx += 1
 
     mean_l1 = total_l1 / n
@@ -180,8 +185,6 @@ def compute_copy_baseline(
             for (c, s), v in sorted(per_group.items())
         },
     }
-
-
 # ---------------------------------------------------------------------------
 # Visualisation
 # ---------------------------------------------------------------------------
