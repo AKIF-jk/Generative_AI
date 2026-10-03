@@ -119,7 +119,7 @@ def evaluate_per_sample(model, loader, dataset, device):
             # SSIM per sample — one call per channel, batched over B
             C = pred.shape[1]
             ssim_maps = [_ssim_channel(pred[:, c:c+1], clean[:, c:c+1]) for c in range(C)]
-            ssim_per = torch.stack(ssim_maps, dim=1).mean(dim=(1, 2, 3)).cpu().tolist()
+            ssim_per = torch.cat(ssim_maps, dim=1).mean(dim=(1, 2, 3)).cpu().tolist()
 
             for i in range(corrupted.shape[0]):
                 record = dataset.records[global_idx]
@@ -153,7 +153,7 @@ def compute_copy_baseline(loader, dataset):
             l1_per = (corrupted - clean).abs().mean(dim=(1, 2, 3)).cpu().tolist()
             C = corrupted.shape[1]
             ssim_maps = [_ssim_channel(corrupted[:, c:c+1], clean[:, c:c+1]) for c in range(C)]
-            ssim_per = torch.stack(ssim_maps, dim=1).mean(dim=(1, 2, 3)).cpu().tolist()
+            ssim_per = torch.cat(ssim_maps, dim=1).mean(dim=(1, 2, 3)).cpu().tolist()
 
             for i in range(corrupted.shape[0]):
                 total_l1 += l1_per[i]
