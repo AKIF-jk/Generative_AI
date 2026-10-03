@@ -10,15 +10,15 @@ from data.dataset import FS2KPairedDataset
 from data.augmentations import PairedValTransform
 from models.generator_unet import GeneratorUNet
 
-def evaluate_and_plot(model_path, data_dir, output_dir, base_channels=64, style_dim=16, max_visualizations=20):
+def evaluate_and_plot(model_path, data_dir, output_dir, base_channels=96, dropout=0.23843508579472333, style_dim=16, max_visualizations=20):
     os.makedirs(output_dir, exist_ok=True)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Running evaluation on: {device}")
-    
+
     val_dataset = FS2KPairedDataset(data_dir, split='test', transform=PairedValTransform())
-    val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False)
-    
-    gen = GeneratorUNet(base_channels=base_channels, style_dim=style_dim).to(device)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+
+    gen = GeneratorUNet(base_channels=base_channels, style_dim=style_dim, dropout=dropout).to(device)
     if os.path.exists(model_path):
         gen.load_state_dict(torch.load(model_path, map_location=device))
         print(f"Loaded model weights from {model_path}")

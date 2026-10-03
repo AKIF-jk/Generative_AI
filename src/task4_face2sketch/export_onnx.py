@@ -4,9 +4,9 @@ import torch.onnx
 import numpy as np
 from models.generator_unet import GeneratorUNet
 
-def export_to_onnx(model_path, onnx_path, base_channels=64, style_dim=16):
+def export_to_onnx(model_path, onnx_path, base_channels=96, dropout=0.23843508579472333, style_dim=16):
     device = torch.device('cpu')
-    gen = GeneratorUNet(base_channels=base_channels, style_dim=style_dim)
+    gen = GeneratorUNet(base_channels=base_channels, style_dim=style_dim, dropout=dropout)
     
     # Load state dict if available
     if os.path.exists(model_path):
