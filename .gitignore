@@ -7,4 +7,5 @@ data/annotations/
 data/*.tar.gz
 resources/
 data/sample_images/
+results/
 
