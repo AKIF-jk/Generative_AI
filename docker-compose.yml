@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -8,9 +6,22 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Mount or download the ONNX model to the root of the backend or app
-      # By default it expects it in /app/generator.onnx
-      - ONNX_MODEL_PATH=/models/generator.onnx
+      - MODEL_ROOT=/models
     volumes:
-      - ./onnx_models:/models
+      # Keep the repository's result layout aligned with MODEL_ROOT/taskN.
+      - ./results/task1:/models/task1:ro
+      - ./results/task2/onnx/onnx:/models/task2:ro
+      - ./results/task4/models:/models/task4:ro
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
     restart: unless-stopped

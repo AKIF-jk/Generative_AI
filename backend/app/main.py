@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import face_to_sketch
+from .routers import experiments, face_to_sketch, hard_routing, universal
 
 app = FastAPI(title="Generative AI Assignment App")
 
@@ -18,3 +18,6 @@ def health_check():
     return {"status": "ok"}
 
 app.include_router(face_to_sketch.router)
+app.include_router(universal.router)
+app.include_router(hard_routing.router)
+app.include_router(experiments.router)

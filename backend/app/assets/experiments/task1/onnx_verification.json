@@ -1,0 +1,56 @@
+{
+  "checkpoint": "/content/drive/MyDrive/data/outputs/final/best.pt",
+  "onnx_path": "/content/drive/MyDrive/outputs/task1/skip2/model.onnx",
+  "opset": 17,
+  "n_parameters": 30807235,
+  "onnx_size_mb": 117.58,
+  "cfg": {
+    "base_channels": 64,
+    "latent_dim": 768,
+    "skip_count": 2,
+    "dropout": 0.2425,
+    "alpha": 0.598
+  },
+  "verification": {
+    "1": {
+      "max_abs_diff": 2.086162567138672e-06,
+      "mean_abs_diff": 2.910004184286663e-07,
+      "pytorch_range": [
+        0.0948205217719078,
+        0.9442680478096008
+      ],
+      "onnx_range": [
+        0.09482038021087646,
+        0.9442681074142456
+      ],
+      "passed": true
+    },
+    "4": {
+      "max_abs_diff": 1.3113021850585938e-06,
+      "mean_abs_diff": 1.6533078905922594e-07,
+      "pytorch_range": [
+        0.09482048451900482,
+        0.9463300108909607
+      ],
+      "onnx_range": [
+        0.09482038021087646,
+        0.9463300108909607
+      ],
+      "passed": true
+    },
+    "8": {
+      "max_abs_diff": 1.4007091522216797e-06,
+      "mean_abs_diff": 1.6967364047104638e-07,
+      "pytorch_range": [
+        0.06285768002271652,
+        0.9463300108909607
+      ],
+      "onnx_range": [
+        0.06285753846168518,
+        0.9463300108909607
+      ],
+      "passed": true
+    }
+  },
+  "all_passed": true
+}

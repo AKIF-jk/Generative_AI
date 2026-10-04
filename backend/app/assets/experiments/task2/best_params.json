@@ -1,0 +1,26 @@
+{
+  "classifier": {
+    "best_trial": 2,
+    "best_val_acc": 0.9915760869565218,
+    "best_params": {
+      "lr": 0.0002814509271606064,
+      "batch_size": 32,
+      "base_channels": 32,
+      "dropout": 0.08764339456056544,
+      "weight_decay": 5.4041038546473305e-05
+    }
+  },
+  "specialist": {
+    "best_trial": 1,
+    "best_mean_ranking_score": 0.2013529248839044,
+    "best_params": {
+      "lr": 0.00022948683681130568,
+      "latent_dim": 512,
+      "base_channels": 16,
+      "batch_size": 16,
+      "alpha": 0.6314650918408482,
+      "weight_decay": 0.00012562773503807024,
+      "skip_count": 1
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "atol": 0.0001,
+  "max_abs_diff": {
+    "classifier": 9.5367431640625e-07,
+    "salt_pepper": 5.7220458984375e-06,
+    "gaussian_blur": 5.4836273193359375e-06,
+    "occlusion": 2.3245811462402344e-06
+  }
+}

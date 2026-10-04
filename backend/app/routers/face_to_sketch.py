@@ -1,96 +1,116 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from fastapi.responses import Response
-import onnxruntime as ort
-import numpy as np
-from PIL import Image
-import io
+"""Task 4 - Style-conditioned face-to-sketch generation."""
+
+from __future__ import annotations
+
 import time
-import os
+from typing import Any
 
-router = APIRouter(prefix="/api/face-to-sketch", tags=["face-to-sketch"])
+import numpy as np
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-# Must stay in sync with src/task4_face2sketch/data/augmentations.py (RESAMPLE).
-# This Docker image only copies backend/app, so it cannot import that module.
-RESAMPLE = Image.Resampling.BICUBIC
+from ..config import MAX_UPLOAD_BYTES, STYLE_NAMES
+from ..imaging import (
+    InvalidImageError,
+    decode_upload,
+    encode_data_url,
+    from_unit_range,
+    resize_to_model_input,
+    to_unit_range,
+)
+from ..registry import ModelUnavailableError, registry
 
-class ONNXModelSession:
-    def __init__(self):
-        self.session = None
-        self.model_path = os.environ.get("ONNX_MODEL_PATH", "generator.onnx")
+router = APIRouter(prefix="/api/face-to-sketch", tags=["task4"])
 
-    def load_model(self):
-        if self.session is None:
-            if not os.path.exists(self.model_path):
-                raise FileNotFoundError(f"Model file {self.model_path} not found.")
-            self.session = ort.InferenceSession(self.model_path)
-            print("Loaded ONNX model.")
+MODEL_KEY = "face_to_sketch"
 
-    def run(self, photo_array, style_id):
-        self.load_model()
-        inputs = {
-            self.session.get_inputs()[0].name: photo_array,
-            self.session.get_inputs()[1].name: style_id
-        }
-        return self.session.run(None, inputs)[0]
+VALID_STYLES = tuple(sorted(STYLE_NAMES))
 
-model_session = ONNXModelSession()
 
-@router.on_event("startup")
-async def startup_event():
-    # Attempt to preload if the model exists, otherwise wait until inference
+@router.post("/generate")
+async def generate(
+    photo: UploadFile = File(...),
+    style: int = Form(...),
+) -> dict[str, Any]:
+    """Generate the sketch that matches ``photo`` under the selected style.
+
+    The style condition is a learned categorical embedding inside the
+    generator, so ``style`` selects one of the three FS2K sketch categories
+    rather than acting as a free-text prompt.
+    """
+    if style not in VALID_STYLES:
+        raise HTTPException(
+            status_code=400, detail=f"style must be one of {', '.join(map(str, VALID_STYLES))}"
+        )
+
+    payload = await photo.read()
+    if len(payload) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"the uploaded file is larger than the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit",
+        )
     try:
-        model_session.load_model()
-    except FileNotFoundError:
-        print("ONNX model not found on startup, will attempt later.")
+        image = decode_upload(payload)
+    except InvalidImageError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-@router.post("")
-async def generate_sketch(photo: UploadFile = File(...), style: int = Form(...)):
-    if style not in [1, 2, 3]:
-        raise HTTPException(status_code=400, detail="Style must be 1, 2, or 3")
-    
-    # Read and validate image
-    contents = await photo.read()
+    total_start = time.perf_counter()
+    resized = resize_to_model_input(image)
+    preprocess_ms = (time.perf_counter() - total_start) * 1000.0
+
+    # Generator convention: NCHW float32 in [-1, 1] plus an int64 style index.
+    photo_tensor = np.ascontiguousarray(
+        np.transpose(to_unit_range(resized), (2, 0, 1))[None, ...], dtype=np.float32
+    )
+    style_tensor = np.array([style - 1], dtype=np.int64)
+
+    inference_start = time.perf_counter()
     try:
-        img = Image.open(io.BytesIO(contents)).convert("RGB")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image file.")
-        
-    start_time = time.time()
-    
-    # Preprocess
-    img = img.resize((128, 128), RESAMPLE)
-    img_array = np.array(img).astype(np.float32)
-    # Normalize to [-1.0, 1.0]
-    img_array = (img_array / 127.5) - 1.0
-    # To NCHW
-    img_array = np.transpose(img_array, (2, 0, 1))
-    img_array = np.expand_dims(img_array, axis=0)
-    
-    # Style mapping (1, 2, 3 -> 0, 1, 2)
-    style_idx = np.array([style - 1], dtype=np.int64)
-    
-    try:
-        out_array = model_session.run(img_array, style_idx)
-    except FileNotFoundError:
-        raise HTTPException(status_code=503, detail="Model is currently unavailable. Please ensure generator.onnx is downloaded.")
-        
-    # Postprocess [-1.0, 1.0] -> [0, 255]
-    out_img = out_array[0] # CHW
-    out_img = (out_img * 0.5 + 0.5) * 255.0
-    out_img = np.clip(out_img, 0, 255).astype(np.uint8)
-    out_img = np.transpose(out_img, (1, 2, 0))
-    
-    result_img = Image.fromarray(out_img)
-    
-    # Save to buffer
-    buf = io.BytesIO()
-    result_img.save(buf, format="PNG")
-    
-    inference_time_ms = int((time.time() - start_time) * 1000)
-    
-    headers = {
-        "X-Inference-Time-ms": str(inference_time_ms),
-        "X-Model-Version": "v1.0-onnx"
+        outputs = registry.run(MODEL_KEY, {"photo": photo_tensor, "style_id": style_tensor})
+    except ModelUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": str(exc),
+                "model": exc.path,
+                "hint": "Place generator.onnx in the Task 4 models directory, then retry.",
+            },
+        ) from exc
+    inference_ms = (time.perf_counter() - inference_start) * 1000.0
+
+    postprocess_start = time.perf_counter()
+    sketch = from_unit_range(np.asarray(outputs[0], dtype=np.float32))
+    postprocess_ms = (time.perf_counter() - postprocess_start) * 1000.0
+    total_ms = (time.perf_counter() - total_start) * 1000.0
+
+    return {
+        "task": "task4",
+        "workspace": "Face-to-Sketch Generator",
+        "style": {"id": style, "name": STYLE_NAMES[style], "embedding_index": style - 1},
+        "images": {
+            "photo": encode_data_url(resized),
+            "sketch": encode_data_url(sketch),
+        },
+        "timing_ms": {
+            "preprocess": round(preprocess_ms, 2),
+            "inference": round(inference_ms, 2),
+            "postprocess": round(postprocess_ms, 2),
+            "total": round(total_ms, 2),
+        },
+        "model": {
+            **registry.info(MODEL_KEY),
+            "opset": 14,
+            "architecture": "U-Net generator, 7 down / 6 up stages, style embedding "
+            "concatenated as extra input channels",
+            "output_range": "[-1, 1] (tanh)",
+        },
     }
-    
-    return Response(content=buf.getvalue(), media_type="image/png", headers=headers)
+
+
+@router.get("/styles")
+def styles() -> dict[str, Any]:
+    """List the three FS2K sketch-style conditions."""
+    return {
+        "styles": [{"id": style, "name": STYLE_NAMES[style]} for style in VALID_STYLES],
+        "note": "The style condition is a learned categorical embedding consumed by "
+        "the generator's first convolution.",
+    }

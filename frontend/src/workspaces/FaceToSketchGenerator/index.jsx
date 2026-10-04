@@ -1,143 +1,66 @@
-import React, { useState, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-const FaceToSketchGenerator = () => {
-  const [selectedFile, setSelectedFile] = useState(null);
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+function FaceToSketchGenerator() {
+  const inputRef = useRef(null);
+  const [file, setFile] = useState(null);
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [sketchUrl, setSketchUrl] = useState('');
   const [style, setStyle] = useState(1);
-  const [resultImage, setResultImage] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [inferenceTime, setInferenceTime] = useState(null);
-  const fileInputRef = useRef(null);
+  const [styles, setStyles] = useState([]);
+  const [timing, setTiming] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-      setResultImage(null);
-      setError(null);
-    }
-  };
+  useEffect(() => {
+    fetch(`${API_URL}/api/face-to-sketch/styles`)
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setStyles(data.styles || []))
+      .catch(() => setStyles([1, 2, 3].map((id) => ({ id, name: `Style ${id}` }))));
+  }, []);
 
-  const handleGenerate = async () => {
-    if (!selectedFile) {
-      setError("Please select an image first.");
-      return;
-    }
+  const selectFile = useCallback((candidate) => {
+    const next = candidate?.[0];
+    if (!next) return;
+    if (!next.type.startsWith('image/')) return setError('Please choose a JPG, PNG, or WEBP image.');
+    if (next.size > 20 * 1024 * 1024) return setError('Please choose an image smaller than 20 MB.');
+    setError(''); setFile(next); setSourceUrl(URL.createObjectURL(next)); setSketchUrl(''); setTiming(null);
+  }, []);
 
-    setLoading(true);
-    setError(null);
-
-    const formData = new FormData();
-    formData.append('photo', selectedFile);
-    formData.append('style', style);
-
+  const generate = async () => {
+    if (!file) return setError('Upload a portrait before generating a sketch.');
+    setBusy(true); setError(''); setSketchUrl(''); setTiming(null);
+    const body = new FormData(); body.append('photo', file); body.append('style', String(style));
     try {
-      // Point this to your backend if running locally: http://localhost:8000/api/face-to-sketch
-      const response = await fetch('/api/face-to-sketch', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Generation failed: ${errText}`);
-      }
-
-      const infTime = response.headers.get('X-Inference-Time-ms');
-      if (infTime) setInferenceTime(infTime);
-
-      const blob = await response.blob();
-      const imageUrl = URL.createObjectURL(blob);
-      setResultImage(imageUrl);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+      const response = await fetch(`${API_URL}/api/face-to-sketch/generate`, { method: 'POST', body });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail?.message || payload.detail || `Request failed (${response.status})`);
+      setSketchUrl(payload.images.sketch); setTiming(payload.timing_ms);
+    } catch (caught) { setError(caught.message || 'The server could not generate a sketch.'); }
+    finally { setBusy(false); }
   };
 
-  return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h2 className="text-2xl font-bold mb-4">Face-to-Sketch Generator</h2>
-      
-      <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Upload Photo</label>
-          <input 
-            type="file" 
-            accept="image/*" 
-            onChange={handleFileChange}
-            ref={fileInputRef}
-            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-          />
-        </div>
+  const reset = () => { setFile(null); setSourceUrl(''); setSketchUrl(''); setTiming(null); setError(''); if (inputRef.current) inputRef.current.value = ''; };
+  const availableStyles = styles.length ? styles : [1, 2, 3].map((id) => ({ id, name: `Style ${id}` }));
 
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Select Style</label>
-          <div className="flex gap-4">
-            {[1, 2, 3].map((s) => (
-              <label key={s} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="style"
-                  value={s}
-                  checked={style === s}
-                  onChange={() => setStyle(s)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                />
-                <span>Style {s}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <button 
-          onClick={handleGenerate}
-          disabled={loading || !selectedFile}
-          className="bg-blue-600 text-white px-6 py-2 rounded font-medium disabled:opacity-50 hover:bg-blue-700 transition"
-        >
-          {loading ? 'Generating...' : 'Generate Sketch'}
-        </button>
-
-        {error && <div className="mt-4 p-3 bg-red-50 text-red-700 rounded">{error}</div>}
-      </div>
-
-      {(selectedFile || resultImage) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 rounded-lg shadow-md">
-          {selectedFile && (
-            <div>
-              <h3 className="font-semibold mb-2">Input Photo</h3>
-              <img 
-                src={URL.createObjectURL(selectedFile)} 
-                alt="Input" 
-                className="w-full max-w-sm rounded border"
-              />
-            </div>
-          )}
-          
-          {resultImage && (
-            <div>
-              <h3 className="font-semibold mb-2 flex items-center justify-between">
-                <span>Generated Sketch</span>
-                {inferenceTime && <span className="text-sm font-normal text-gray-500">{inferenceTime}ms</span>}
-              </h3>
-              <img 
-                src={resultImage} 
-                alt="Generated Sketch" 
-                className="w-full max-w-sm rounded border mb-4"
-              />
-              <a 
-                href={resultImage} 
-                download={`sketch_style${style}.png`}
-                className="inline-block bg-gray-100 text-gray-700 px-4 py-2 rounded font-medium hover:bg-gray-200"
-              >
-                Download Result
-              </a>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
+  return <div className="sketch-app">
+    <main id="top" className="sketch-main">
+      <section className="hero"><p className="eyebrow">AI PORTRAIT STUDIO</p><h1>Turn a face into a<br /><em>hand-drawn sketch.</em></h1><p className="hero-copy">Upload a portrait and let our style-conditioned generator create a pencil-style sketch in seconds.</p></section>
+      <section className="studio-grid">
+        <article className="studio-card input-card">
+          <div className="card-heading"><div><span className="step-label">01</span><h2>Upload a portrait</h2></div><span className="file-hint">JPG, PNG or WEBP · max 20 MB</span></div>
+          {!sourceUrl ? <label className={`dropzone ${dragging ? 'is-dragging' : ''}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); selectFile(event.dataTransfer.files); }}><input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectFile(event.target.files)} /><span className="upload-icon">↥</span><strong>Drop your image here</strong><span>or <u>browse files</u></span></label> : <div className="preview-frame"><img src={sourceUrl} alt="Selected portrait" /><button className="image-remove" onClick={reset}>Remove image</button></div>}
+          <div className="style-picker"><span>Sketch style</span><div className="style-options">{availableStyles.map((option) => <button key={option.id} className={style === option.id ? 'selected' : ''} onClick={() => setStyle(option.id)}>{option.name}</button>)}</div></div>
+          <button className="generate-button" disabled={!file || busy} onClick={generate}>{busy ? <><span className="spinner" /> Creating sketch…</> : <>Generate sketch <span className="arrow">→</span></>}</button>
+          {error && <div className="error-message" role="alert"><span>!</span>{error}</div>}
+        </article>
+        <article className="studio-card output-card"><div className="card-heading"><div><span className="step-label">02</span><h2>Your sketch</h2></div>{sketchUrl && <a className="download-link" href={sketchUrl} download="generated-sketch.png">Download <span>↓</span></a>}</div><div className={`result-frame ${sketchUrl ? 'has-result' : ''}`}>{sketchUrl ? <img src={sketchUrl} alt="Generated sketch" /> : <div className="empty-result"><span className="sparkle">✧</span><strong>Your result will appear here</strong><span>Upload a portrait to get started</span></div>}</div>{timing && <div className="timing"><span>Generation complete</span><strong>{timing.total} ms</strong></div>}</article>
+      </section>
+      <p className="privacy-note"><span>✦</span> Images are processed for this session and are not stored.</p>
+    </main>
+  </div>;
+}
 
 export default FaceToSketchGenerator;
