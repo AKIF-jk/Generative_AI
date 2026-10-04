@@ -1,8 +1,22 @@
+# Core PyTorch and Computer Vision
+torch>=2.2,<3
+torchvision>=0.17,<1
 numpy>=1.26,<3
 Pillow>=10.0,<12
-torch>=2.2,<3
+
+# Scientific Computing & Metrics
+scikit-learn>=1.4,<2
+scikit-image>=0.22,<1
 matplotlib>=3.8,<4
+
+# Experiment Tracking & Optimization
 optuna>=4.0,<6
 wandb>=0.17,<1
-onnx>=1.16,<2
-onnxruntime>=1.18,<2
+
+# Model Export & Inference
+onnx>=1.15,<2
+onnxruntime>=1.17,<2
+
+# Utilities & Configuration
+tqdm>=4.66,<5
+pyyaml>=6.0,<7

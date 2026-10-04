@@ -45,3 +45,47 @@ Run automated and visual checks before training:
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 PYTHONPATH=src python3 scripts/visualize_pet_corruptions.py
 ```
+
+## Task 4: Face-to-Sketch Generator (Conditional GAN)
+
+Task 4 uses the FS2K dataset and trains a Conditional GAN to generate sketches from faces.
+
+### Reproducing Task 4 on Google Colab (Recommended)
+
+Since GAN training is computationally expensive, we recommend running the provided Jupyter Notebook in Google Colab.
+
+1. Download or clone this repository to your Colab environment.
+2. Upload the `FS2K` dataset to `data/FS2K/` in your Colab environment.
+3. Open `notebooks/task4_colab_workflow.ipynb` in Colab.
+4. Run all cells to perform data auditing, Optuna HPO, full training, evaluation, and ONNX export.
+5. Download the final `generator.onnx` file from Colab and place it in the `onnx_models/` folder on your local machine.
+
+### Reproducing Task 4 Locally
+
+If you have a local GPU, run the following commands sequentially:
+
+```bash
+# 1. Ensure dataset is at data/FS2K
+# 2. Run Hyperparameter Search (Optuna)
+PYTHONPATH=src/task4_face2sketch python3 src/task4_face2sketch/optuna_search.py
+
+# 3. Run Full Training (Update task4.yaml with best params if desired)
+PYTHONPATH=src/task4_face2sketch python3 src/task4_face2sketch/train.py --config src/task4_face2sketch/configs/task4.yaml
+
+# 4. Evaluation
+PYTHONPATH=src/task4_face2sketch python3 src/task4_face2sketch/evaluate.py
+
+# 5. Export to ONNX
+PYTHONPATH=src/task4_face2sketch python3 src/task4_face2sketch/export_onnx.py
+```
+
+### Running the Application Workspace
+
+Once you have the `generator.onnx` file, place it in `onnx_models/generator.onnx`.
+Start the backend via Docker Compose:
+
+```bash
+docker-compose up --build
+```
+
+The backend API is accessible at `http://localhost:8000`. You can integrate the provided React Component located at `frontend/src/workspaces/FaceToSketchGenerator/index.jsx` into your frontend application!

@@ -76,14 +76,14 @@ from task1.train import TrainConfig, train
 # ---------------------------------------------------------------------------
 # Search space
 # ---------------------------------------------------------------------------
-# Study 0 finding: base_channels ≥ 96 was consistently pruned by the
-# MedianPruner and never beat smaller models on the ranking metric. models.py
-# clamps the channel progression at 512, so base_channels=128 collapses the
-# doubling pattern anyway (128 -> 256 -> 512 -> 512 -> 512). Restricting to
-# [32, 48, 64] concentrates compute on the region the search actually favored.
-BASE_CHANNEL_CHOICES: list[int] = [32, 48, 64]
-LATENT_DIM_CHOICES: list[int] = [256, 384, 512, 768]
-BATCH_SIZE_CHOICES: list[int] = [16, 32,64]
+
+# Capped at 128: models.py builds the encoder channel list as
+# [b, min(2b, 512), min(4b, 512), min(8b, 512), 512].  Anything above 128 makes
+# the very first doubling hit the 512 clamp, collapsing the doubling pattern
+# (e.g. 256 -> 512 -> 512 -> 512 -> 512), so larger widths buy nothing but cost.
+BASE_CHANNEL_CHOICES: list[int] = [32, 48, 64, 96, 128]
+LATENT_DIM_CHOICES: list[int] = [128, 192, 256, 384, 512, 768, 1024]
+BATCH_SIZE_CHOICES: list[int] = [16, 32, 64]
 
 DROPOUT_LOW: float = 0.0
 DROPOUT_HIGH: float = 0.3
@@ -91,11 +91,11 @@ LR_LOW: float = 1e-4
 LR_HIGH: float = 3e-3
 WEIGHT_DECAY_LOW: float = 1e-6
 WEIGHT_DECAY_HIGH: float = 1e-3
-# Study 0 finding: the best trial sampled α = 0.504 and every completed trial
-# with α > 0.75 scored above 0.40. The SSIM term carries real weight on this
-# task, so the range is widened downward and the wasted upper region removed.
-ALPHA_LOW: float = 0.4
-ALPHA_HIGH: float = 0.8
+# Biased toward L1 (α ≥ 0.5) because pixel fidelity is the primary quality
+# signal for restoration, while the upper bound of 0.95 still lets SSIM exert
+# meaningful influence on the training loss.
+ALPHA_LOW: float = 0.5
+ALPHA_HIGH: float = 0.95
 
 # In-trial early stop inside train(); independent of — and secondary to — the
 # Optuna pruner, catching diverging trials before the pruner has warmed up.

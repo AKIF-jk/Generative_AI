@@ -92,7 +92,6 @@ class TrainConfig:
 
     # Early stop (in-trial)
     early_stop_patience: int | None = 4
-    min_epochs_before_stopping: int = 20
 
     # Pruner callback
     report_to: Callable[[int, float], None] | None = None
@@ -385,7 +384,6 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
         # --- Early stopping ---
         if (
             cfg.early_stop_patience is not None
-            and epoch >= cfg.min_epochs_before_stopping
             and epochs_without_improve >= cfg.early_stop_patience
         ):
             print(f"  -> Early stopping (no improvement for {cfg.early_stop_patience} epochs)")
