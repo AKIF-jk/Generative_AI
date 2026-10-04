@@ -4,6 +4,9 @@ import torch.optim as optim
 import yaml
 import os
 
+import json
+import pandas as pd
+
 from data.dataset import FS2KPairedDataset
 from data.augmentations import PairedTransform, PairedValTransform
 from models.generator_unet import GeneratorUNet
@@ -55,3 +58,11 @@ if __name__ == "__main__":
     print("  Params: ")
     for key, value in trial.params.items():
         print(f"    {key}: {value}")
+
+
+    study.trials_dataframe().to_csv("optuna_trials.csv", index=False)
+
+    with open("optuna_best_params.json", "w") as f:
+        json.dump(study.best_params, f, indent=2)
+
+    print("Saved optuna_trials.csv and optuna_best_params.json")
