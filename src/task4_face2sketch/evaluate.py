@@ -1,4 +1,5 @@
 import os
+import json
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -104,17 +105,35 @@ def evaluate_and_plot(model_path, data_dir, output_dir, base_channels=96, dropou
     print("="*50)
     all_l1 = []
     all_ssim = []
+    per_style_metrics = {}
     for s in range(3):
         avg_l1 = np.mean(style_l1[s]) if style_l1[s] else 0.0
         avg_ssim = np.mean(style_ssim[s]) if style_ssim[s] else 0.0
         all_l1.extend(style_l1[s])
         all_ssim.extend(style_ssim[s])
+        per_style_metrics[f"style_{s+1}"] = {
+            "l1": float(avg_l1),
+            "ssim": float(avg_ssim),
+            "n": len(style_l1[s]),
+        }
         print(f"Style {s+1}: L1 Loss = {avg_l1:.4f} | SSIM = {avg_ssim:.4f} (N={len(style_l1[s])})")
         
     print("-"*50)
-    print(f"Overall Test Set: L1 Loss = {np.mean(all_l1):.4f} | SSIM = {np.mean(all_ssim):.4f} (Total N={len(all_l1)})")
+    overall_l1 = float(np.mean(all_l1)) if all_l1 else 0.0
+    overall_ssim = float(np.mean(all_ssim)) if all_ssim else 0.0
+    total_n = len(all_l1)
+    print(f"Overall Test Set: L1 Loss = {overall_l1:.4f} | SSIM = {overall_ssim:.4f} (Total N={total_n})")
     print(f"Visual evaluations and error maps saved to: {output_dir}")
     print("="*50)
+
+    metrics = {
+        "overall": {"l1": overall_l1, "ssim": overall_ssim, "n": total_n},
+        "per_style": per_style_metrics,
+    }
+    metrics_path = os.path.join(output_dir, "metrics.json")
+    with open(metrics_path, "w") as f:
+        json.dump(metrics, f, indent=2)
+    print(f"Metrics saved to: {metrics_path}")
 
 if __name__ == "__main__":
     evaluate_and_plot("best_generator.pth", "data/FS2K", "evaluation_results")
