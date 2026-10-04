@@ -1,0 +1,6 @@
+/.venv
+/data
+/results
+*.pyc
+/resources
+.env
