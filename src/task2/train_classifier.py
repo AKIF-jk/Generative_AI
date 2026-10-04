@@ -48,7 +48,7 @@ class ClassifierConfig:
     """All tuneable and fixed parameters for one classifier training run."""
 
     # Paths
-    dataset_root: Path = field(default=Path("data/pet_images"))
+    dataset_root: Path = field(default=Path("data"))
     split_csv: Path = field(default=Path("data/manifests/development_split.csv"))
     val_manifest: Path = field(default=Path("data/manifests/validation_manifest.json"))
     output_dir: Path = field(default=Path("output/task2/classifier"))

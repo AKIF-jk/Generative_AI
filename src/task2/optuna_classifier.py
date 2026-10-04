@@ -52,7 +52,7 @@ def objective(trial: optuna.Trial, args: argparse.Namespace) -> float:
         seed=42,
         early_stop_patience=5,
         min_epochs_before_stopping=8,
-        report_to=lambda epoch, value: trial.report(-value, epoch),  # report accuracy (negate for minimisation)
+        report_to=lambda epoch, value: trial.report(value, epoch),
     )
 
     try:
